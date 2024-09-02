@@ -35,6 +35,7 @@
 #include <libcxlmi.h>
 
 #include "private.h"
+#include "cxl_mailbox.h"
 
 #if !defined(AF_MCTP)
 #define AF_MCTP 45
@@ -1045,6 +1046,190 @@ static bool cxlmi_cmd_is_fmapi(int cmdset)
 	}
 }
 
+static void map_mailbox_registers(struct cxlmi_endpoint *ep)
+{
+    ep->fd_mailbox = open("/dev/mem", O_RDWR | O_DSYNC);
+    if (ep->fd_mailbox == -1)
+    {
+        perror("Error opening /dev/mem");
+        exit(1);
+    }
+    uint64_t aligned_addr = mailbox_base_address & 0xFFFFFFFFFFFFF000;
+    uint64_t mailbox_offset = mailbox_base_address - aligned_addr;
+    DEBUG_PRINT("aligned_addr: 0x%llX\n", aligned_addr);
+    ep->map_base = mmap(NULL, 0x1000, PROT_READ | PROT_WRITE, MAP_SHARED, ep->fd_mailbox, aligned_addr);
+    if (ep->map_base == MAP_FAILED)
+    {
+        perror("Error mapping memory");
+        close(ep->fd_mailbox);
+        exit(1);
+    }
+    uint8_t *mailbox_base = (uint8_t *)map_base + (uint8_t)mailbox_offset;
+    DEBUG_PRINT("Mailbox Base: 0x%08x\n", mailbox_base);
+    ep->mb_regs = (mailbox_registers *)(mailbox_base);
+}
+
+static int check_mailbox_ready(mailbox_registers *mb_regs)
+{
+    return mb_regs->MB_Control.doorbell == 0;
+}
+
+static void mailbox_write_command(mailbox_registers *mb_regs, uint16_t command)
+{
+    mb_regs->Command_Register.opcode = command;
+}
+
+static void mailbox_clear_payload_length(mailbox_registers *mb_regs)
+{
+    mb_regs->Command_Register.payload_size = 0;
+}
+
+static void mailbox_set_payload_length(mailbox_registers *mb_regs, size_t length)
+{
+    mb_regs->Command_Register.payload_size = length;
+}
+
+static void mailbox_write_payload(mailbox_registers *mb_regs, size_t length, uint32_t *payload)
+{
+    memcpy(mb_regs->Commmand_Payload_Registers, payload, length);
+}
+
+static void mailbox_set_doorbell(mailbox_registers *mb_regs)
+{
+    mb_regs->MB_Control.doorbell = 1;
+}
+
+static uint16_t mailbox_get_payload_length(mailbox_registers *mb_regs)
+{
+    return mb_regs->Command_Register.payload_size;
+}
+
+static uint16_t mailbox_status_return_code(mailbox_registers *mb_regs)
+{
+    return mb_regs->MB_Status.return_code;
+}
+
+static void mailbox_read_payload(mailbox_registers *mb_regs, size_t length, uint32_t *payload)
+{
+    memcpy(payload, mb_regs->Commmand_Payload_Registers, length);
+}
+
+
+static int cxlmi_mbox_send(struct cxlmi_endpoint *ep, void *req_buf, size_t req_buf_sz,
+                           void *rsp_buf, size_t rsp_buf_sz)
+{
+    struct cxlmi_ctx *ctx = ep->ctx;
+    uint16_t command;
+    uint32_t *payload = req_buf;
+    size_t payload_size = req_buf_sz;
+    int ret_code;
+
+    if (ep->mb_regs == NULL)
+        map_mailbox_registers(ep);
+
+    if (check_mailbox_ready(ep->mb_regs))
+    {
+        cxlmi_msg(ctx, LOG_DEBUG, "Mailbox is ready\n");
+        mailbox_write_command(ep->mb_regs, command);
+        mailbox_clear_payload_length(ep->mb_regs);
+
+        if (payload_size != 0)
+        {
+            mailbox_set_payload_length(ep->mb_regs, payload_size);
+            mailbox_write_payload(ep->mb_regs, payload_size, payload);
+        }
+        else
+        {
+            mailbox_set_payload_length(ep->mb_regs, 0);
+        }
+
+        mailbox_set_doorbell(ep->mb_regs);
+    }
+    else
+    {
+        cxlmi_msg(ctx, LOG_ERR, "Mailbox is not ready\n");
+        close_mmap(ep);
+        return -1; // Return error if mailbox is not ready initially
+    }
+
+    for (int j = 0; j < 100; j++)
+    {
+        if (check_mailbox_ready(ep->mb_regs))
+        {
+            cxlmi_msg(ctx, LOG_DEBUG, "Mailbox is ready\n");
+            uint16_t payload_length = mailbox_get_payload_length(ep->mb_regs);
+            cxlmi_msg(ctx, LOG_DEBUG, "Payload Length: 0x%04x\n", payload_length);
+
+            if (payload_length != 0)
+            {
+                if (payload_length > rsp_buf_sz)
+                {
+                    cxlmi_msg(ctx, LOG_ERR, "Response buffer too small\n");
+                    return -1;
+                }
+                mailbox_read_payload(ep->mb_regs, payload_length, rsp_buf);
+                ret_code = mailbox_status_return_code(ep->mb_regs);
+                return ret_code;
+            }
+        }
+        else
+        {
+            cxlmi_msg(ctx, LOG_DEBUG, "Mailbox is not ready\n");
+            usleep(100000); // Sleep for 100 milliseconds
+        }
+    }
+
+    cxlmi_msg(ctx, LOG_ERR, "Mailbox timeout\n");
+    return -1; // Return error if mailbox is not ready after 100 attempts
+}
+
+static int send_mbox_direct(struct cxlmi_endpoint *ep,
+                            struct cxlmi_cci_msg *req_msg, size_t req_msg_sz,
+                            struct cxlmi_cci_msg *rsp_msg, size_t rsp_msg_sz,
+                            size_t rsp_msg_sz_min)
+{
+    int rc;
+    void *req_buf, *rsp_buf;
+    size_t req_buf_sz, rsp_buf_sz;
+
+    req_buf_sz = req_msg_sz;
+    rsp_buf_sz = rsp_msg_sz;
+
+    req_buf = malloc(req_buf_sz);
+    if (!req_buf)
+        return -ENOMEM;
+
+    rsp_buf = malloc(rsp_buf_sz);
+    if (!rsp_buf) {
+        free(req_buf);
+        return -ENOMEM;
+    }
+
+    memcpy(req_buf, req_msg, req_msg_sz);
+
+    rc = cxlmi_mbox_send(ep, req_buf, req_buf_sz, rsp_buf, rsp_buf_sz);
+    if (rc < 0) {
+        cxlmi_msg(ep->ctx, LOG_ERR, "Mailbox send failed\n");
+        goto out;
+    }
+
+    if ((size_t)rc < rsp_msg_sz_min) {
+        cxlmi_msg(ep->ctx, LOG_ERR, "Response too short\n");
+        rc = -EINVAL;
+        goto out;
+    }
+
+    memcpy(rsp_msg, rsp_buf, min((size_t)rc, rsp_msg_sz));
+    rc = 0;
+
+out:
+    free(req_buf);
+    free(rsp_buf);
+    return rc;
+}
+
+
+
 int send_cmd_cci(struct cxlmi_endpoint *ep, struct cxlmi_tunnel_info *ti,
 		 struct cxlmi_cci_msg *req_msg, size_t req_msg_sz,
 		 struct cxlmi_cci_msg *rsp_msg, size_t rsp_msg_sz,
@@ -1074,6 +1259,10 @@ int send_cmd_cci(struct cxlmi_endpoint *ep, struct cxlmi_tunnel_info *ti,
 				       rsp_msg, rsp_msg_sz, rsp_msg_sz_min);
 		else if (ti->level == 2)
 			rc = send_mctp_tunnel2(ep, ti, req_msg, req_msg_sz,
+				       rsp_msg, rsp_msg_sz, rsp_msg_sz_min);
+	} else if (ep->mbox_addr) {
+		if (!ti || ti->level == 0)
+			rc = send_mbox_direct(ep, req_msg, req_msg_sz,
 				       rsp_msg, rsp_msg_sz, rsp_msg_sz_min);
 	} else {
 		if (!ti || ti->level == 0)

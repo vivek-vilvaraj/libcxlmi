@@ -14,7 +14,7 @@
 #include <linux/types.h>
 
 #include <linux/mctp.h>
-
+#include <cxl_mailbox.h>
 #include <ccan/list/list.h>
 
 #define CXLMI_EXPORT __attribute__ ((visibility("default")))
@@ -295,6 +295,13 @@ struct cxlmi_endpoint {
 	/* ioctl (primary mbox) */
 	int fd;
 	char *devname;
+	/*address of the mailbox in pcie config space*/
+	uint64_t mbox_addr;
+	int fd_mailbox;
+	void *map_base;
+	mailbox_registers *mb_regs;
+	uint64_t mbox_size;
+	uint64_t mbox_offset;
 
 	bool has_fmapi;
 
