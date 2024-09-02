@@ -50,6 +50,26 @@ else
     )
 endif
 
+# Find the libpci.so library
+libpci = cc.find_library('pci', dirs: '/usr/lib/x86_64-linux-gnu', required: true)
+
+# Create a dependency object with the found library and include directory
+libpci_dep = declare_dependency(
+    include_directories: include_directories('/usr/include'),
+    dependencies: [libpci]
+)   
+
+libpciaccess_dep = dependency(
+    'pciaccess',
+    required: true,
+    fallback: ['pciaccess', 'libpciaccess_dep'],
+    default_options: [
+        'default_library=shared',
+        'embedded_tests=false',
+        'tools=false',
+    ],
+)
+
 conf.set('CONFIG_DBUS', libdbus_dep.found(), description: 'Enable dbus support?')
 
 conf.set10(

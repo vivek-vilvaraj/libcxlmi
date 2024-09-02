@@ -1,4 +1,6 @@
 #pragma once
+#ifndef CXL_MAILBOX_H
+#define CXL_MAILBOX_H
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -173,20 +175,5 @@ enum mailbox_ret_codes{
     INVALID_PAYLOAD_LENGTH      = 0x0016
 };
 
-void print_config_header(struct pci_dev *pdev);
-void cxl_mailbox_get_timestamp(uint64_t mailbox_base_address);
-void print_extended_config(struct pci_dev *pdev);
-uint16_t get_dvsec_register_locator_offset(struct pci_dev *pdev);
-uint64_t get_mailbox_base_address (struct pci_dev *pdev);
-uint32_t get_register_block_number_from_header(registerLocator *register_locator);
-int send_mailbox_command(uint64_t mailbox_base_address, uint16_t command,uint16_t *payload_size, uint32_t *payload, uint16_t *ret_code);
-bool check_mailbox_ready(mailbox_registers *mb_regs);
-void mailbox_write_payload(mailbox_registers *mb_regs, uint16_t payload_length, uint32_t *payload);
-void read_payload(mailbox_registers *mb_regs, uint16_t payload_length, uint32_t *payload);
-void mailbox_write_command(mailbox_registers *mb_regs, uint16_t command);
-void mailbox_clear_payload_length(mailbox_registers *mb_regs);
-void mailbox_set_payload_length(mailbox_registers *mb_regs, uint16_t payload_size);
-void mailbox_set_doorbell(mailbox_registers *mb_regs);
 
-uint16_t mailbox_get_payload_length(mailbox_registers *mb_regs);
-uint16_t mailbox_status_return_code(mailbox_registers *mb_regs);
+#endif // CXL_MAILBOX_H

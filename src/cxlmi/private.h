@@ -14,7 +14,7 @@
 #include <linux/types.h>
 
 #include <linux/mctp.h>
-#include <cxl_mailbox.h>
+#include <cxlmi/cxl_mailbox.h>
 #include <ccan/list/list.h>
 
 #define CXLMI_EXPORT __attribute__ ((visibility("default")))

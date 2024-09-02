@@ -2,7 +2,7 @@
 #
 # This file is part of libcxlmi.
 #
-deps = [ libdbus_dep ]
+deps = [ libdbus_dep, libpci_dep, libpciaccess_dep ]
 
 sources = [
 	'cxlmi/log.c',

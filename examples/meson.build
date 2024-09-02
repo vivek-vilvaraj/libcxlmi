@@ -15,3 +15,10 @@ executable(
     dependencies: libcxlmi_dep,
     include_directories: [inc]
 )
+
+executable(
+    'cxl-config-space',
+    ['cxl-config-space.c'],
+    dependencies: libcxlmi_dep,
+    include_directories: [inc]
+)
