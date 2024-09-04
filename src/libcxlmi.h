@@ -97,6 +97,18 @@ struct cxlmi_endpoint *cxlmi_open(struct cxlmi_ctx *ctx, const char *devname);
 
 struct cxlmi_endpoint *cxlmi_config_space_access(struct cxlmi_ctx *ctx, const char *device);
 /**
+ * cxlmi_mailbox_address_access() - Create an endpoint with a given mailbox address.
+ * @ctx: library context object to create under
+ * @mailbox_address: Mailbox address to be used
+ *
+ * This function creates an endpoint and sets the mailbox address directly.
+ *
+ * Return: New endpoint object with the specified mailbox address, or NULL on failure.
+ *
+ * See &cxlmi_close
+ */
+struct cxlmi_endpoint *cxlmi_mailbox_address_access(struct cxlmi_ctx *ctx, uint64_t mailbox_address);
+/**
  * cxlmi_close() - Close an endpoint connection and release resources
  *
  * @ep: Endpoint object to close

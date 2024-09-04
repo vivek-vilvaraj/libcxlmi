@@ -1306,6 +1306,19 @@ static void close_mmap(struct cxlmi_endpoint *ep)
     }
 }
 
+CXLMI_EXPORT struct cxlmi_endpoint *cxlmi_mailbox_address_access(struct cxlmi_ctx *ctx, uint64_t mailbox_address)
+{
+    struct cxlmi_endpoint *ep;
+
+    ep = init_endpoint(ctx);
+    if (!ep)
+        return NULL;
+
+    ep->mbox_addr = mailbox_address;
+
+    return ep;
+}
+
 CXLMI_EXPORT struct cxlmi_endpoint * cxlmi_config_space_access(struct cxlmi_ctx *ctx, const char *dev_name)
 {
 	struct cxlmi_endpoint *ep;
