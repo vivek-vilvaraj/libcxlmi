@@ -1244,17 +1244,26 @@ static bool check_mailbox_ready(mailbox_registers *mb_regs)
 
 static void mailbox_write_command(mailbox_registers *mb_regs, uint16_t command)
 {
-    mb_regs->Command_Register.opcode = command;
+    struct mailbox_command_register temp;
+    memcpy(&temp, &mb_regs->Command_Register, sizeof(struct mailbox_command_register));
+    temp.opcode = command;
+    memcpy(&mb_regs->Command_Register, &temp, sizeof(struct mailbox_command_register));
 }
 
 static void mailbox_clear_payload_length(mailbox_registers *mb_regs)
 {
-    mb_regs->Command_Register.payload_size = 0;
+    struct mailbox_command_register temp;
+    memcpy(&temp, &mb_regs->Command_Register, sizeof(struct mailbox_command_register));
+    temp.payload_size = 0;
+    memcpy(&mb_regs->Command_Register, &temp, sizeof(struct mailbox_command_register));
 }
 
 static void mailbox_set_payload_length(mailbox_registers *mb_regs, size_t length)
 {
-    mb_regs->Command_Register.payload_size = length;
+    struct mailbox_command_register temp;
+    memcpy(&temp, &mb_regs->Command_Register, sizeof(struct mailbox_command_register));
+    temp.payload_size = length;
+    memcpy(&mb_regs->Command_Register, &temp, sizeof(struct mailbox_command_register));
 }
 
 static void mailbox_write_payload(mailbox_registers *mb_regs, size_t length, uint32_t *payload)
@@ -1264,7 +1273,10 @@ static void mailbox_write_payload(mailbox_registers *mb_regs, size_t length, uin
 
 static void mailbox_set_doorbell(mailbox_registers *mb_regs)
 {
-    mb_regs->MB_Control.doorbell = 1;
+    struct mailbox_control_register temp;
+    memcpy(&temp, &mb_regs->MB_Control, sizeof(struct mailbox_control_register));
+    temp.doorbell = 1;
+    memcpy(&mb_regs->MB_Control, &temp, sizeof(struct mailbox_control_register));
 }
 
 static uint16_t mailbox_get_payload_length(mailbox_registers *mb_regs)
@@ -1294,7 +1306,7 @@ static void close_mmap(struct cxlmi_endpoint *ep)
     }
 }
 
-CXLMI_EXPORT struct cxlmi_endpoint *cxlmi_config_space_access(struct cxlmi_ctx *ctx, const char *dev_name)
+CXLMI_EXPORT struct cxlmi_endpoint * cxlmi_config_space_access(struct cxlmi_ctx *ctx, const char *dev_name)
 {
 	struct cxlmi_endpoint *ep;
 	int errno_save;

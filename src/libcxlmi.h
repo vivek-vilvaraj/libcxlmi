@@ -81,7 +81,21 @@ int cxlmi_scan_mctp(struct cxlmi_ctx *ctx);
  * See &cxlmi_close
  */
 struct cxlmi_endpoint *cxlmi_open(struct cxlmi_ctx *ctx, const char *devname);
+/**
+ * cxlmi_config_space_access() - Create an endpoint to access PCI config space.
+ * @ctx: library context object to create under
+ * @device: PCI device address in BDF format (e.g. "0000:00:00.0")
+ *
+ * This function creates an endpoint for accessing the PCI configuration space
+ * of a CXL device. It uses the PCI Enhanced Configuration Access Mechanism (ECAM)
+ * to map the device's config space into memory.
+ *
+ * Return: New endpoint object for the specified device, or NULL on failure.
+ *
+ * See &cxlmi_close
+ */
 
+struct cxlmi_endpoint *cxlmi_config_space_access(struct cxlmi_ctx *ctx, const char *device);
 /**
  * cxlmi_close() - Close an endpoint connection and release resources
  *
