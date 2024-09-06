@@ -350,6 +350,36 @@ static int clear_and_populate_device_log(struct cxlmi_endpoint *ep)
     return 0;
 }
 
+int get_supported_logs_sublist(struct cxlmi_endpoint *ep)
+{
+    int rc;
+    struct cxlmi_cmd_get_supported_logs_sublist_req get_supported_logs_sublist = {0};
+    struct cxlmi_cmd_get_supported_logs_sublist_rsp *ret;
+
+    ret = calloc(1, sizeof(*ret));
+    if (!ret)
+        return -1;  
+
+    get_supported_logs_sublist.max_supported_log_entries = 1; // this is the minimum allowed by the spec
+    get_supported_logs_sublist.start_log_entry_index = 0;
+
+    rc = cxlmi_cmd_get_supported_logs_sublist(ep, NULL, &get_supported_logs_sublist, ret);
+    if (rc)
+        return rc;
+
+    printf("Number of supported log entries: %d\n", ret->num_supported_log_entries);
+    printf("Total number of supported log entries: %d\n", ret->total_num_supported_log_entries);
+    printf("Start log entry index: %d\n", ret->start_log_entry_index);
+    
+    printf("Supported Logs Sublist:\n");
+    for (int i = 0; i < ret->num_supported_log_entries; i++) {
+        printf("  Log %d: %s\n", i + 1, ret->entries[i].uuid);
+    }
+
+    free(ret);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     struct cxlmi_ctx *ctx;
@@ -383,6 +413,7 @@ int main(int argc, char **argv)
         printf("3. Get device logs\n");
         printf("4. Get device logs capabilities\n");
         printf("5. Clear and populate device log\n");
+        printf("6. Get supported logs sublist\n");
         printf("q. Quit\n");
         printf("Enter your choice: ");
         int ret = scanf(" %c", &choice);
@@ -424,6 +455,13 @@ int main(int argc, char **argv)
                 rc = clear_and_populate_device_log(ep);
                 if (rc) {
                     fprintf(stderr, "Failed to clear and populate device log\n");
+                    goto exit_close_ep;
+                }
+                break;
+            case '6':
+                rc = get_supported_logs_sublist(ep);
+                if (rc) {
+                    fprintf(stderr, "Failed to get supported logs sublist\n");
                     goto exit_close_ep;
                 }
                 break;
