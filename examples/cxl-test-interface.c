@@ -167,6 +167,49 @@ static int get_device_logs(struct cxlmi_endpoint *ep)
 	return rc;
 }
 
+void parse_and_show_log_capabilities(struct cxlmi_cmd_get_log_capabilities_rsp *ret)
+{ 
+    printf("Parameter flags: %u\n", ret->parameter_flags);
+    if (ret->parameter_flags & 0x1) {
+        printf("  Clear Log Supported\n");
+    }
+    if (ret->parameter_flags & 0x2) {
+        printf("  Populate Log Supported\n");
+    }
+    if (ret->parameter_flags & 0x4) {
+        printf("  Auto Populate Supported\n");
+    }
+    if (ret->parameter_flags & 0x8) {
+        printf("  Persistent across Cold Reset\n");
+    }
+    if (ret->parameter_flags & 0xFFFFFFF0) {
+        printf("  Reserved bits set: 0x%08x\n", ret->parameter_flags & 0xFFFFFFF0);
+    }
+}
+
+static int get_device_logs_capabilities(struct cxlmi_endpoint *ep)
+{
+    int rc;
+    struct cxlmi_cmd_get_log_capabilities_req get_log_capabilities = {0};
+    struct cxlmi_cmd_get_log_capabilities_rsp *ret;
+
+    ret = calloc(1, sizeof(*ret));
+    if (!ret)
+        return -1;
+
+    memcpy(get_log_capabilities.uuid, cel_uuid, sizeof(get_log_capabilities.uuid));
+
+    rc = cxlmi_cmd_get_log_capabilities(ep, NULL, &get_log_capabilities, ret);
+    if (rc)
+        return rc;
+
+    parse_and_show_log_capabilities(ret);
+
+
+    free(ret);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     struct cxlmi_ctx *ctx;
@@ -198,6 +241,7 @@ int main(int argc, char **argv)
         printf("1. Show device info\n");
         printf("2. Test timestamp\n");
         printf("3. Get device logs\n");
+        printf("4. Get device logs capabilities\n");
         printf("q. Quit\n");
         printf("Enter your choice: ");
         int ret = scanf(" %c", &choice);
@@ -225,6 +269,13 @@ int main(int argc, char **argv)
                 rc = get_device_logs(ep);
                 if (rc) {
                     fprintf(stderr, "Failed to get device logs\n");
+                    goto exit_close_ep;
+                }
+                break;
+            case '4':
+                rc = get_device_logs_capabilities(ep);
+                if (rc) {
+                    fprintf(stderr, "Failed to get device logs capabilities\n");
                     goto exit_close_ep;
                 }
                 break;
