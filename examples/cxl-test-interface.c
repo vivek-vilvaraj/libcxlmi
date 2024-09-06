@@ -210,6 +210,146 @@ static int get_device_logs_capabilities(struct cxlmi_endpoint *ep)
     return 0;
 }
 
+static int clear_and_populate_device_log(struct cxlmi_endpoint *ep)
+{
+    int rc;
+    struct cxlmi_cmd_clear_log clear_log = {0};
+    struct cxlmi_cmd_populate_log populate_log = {0};
+    // Get the log size first
+    struct cxlmi_cmd_get_supported_logs *gsl;
+    size_t cel_size = 0;
+
+    gsl = calloc(1, sizeof(*gsl) +
+                 CXLMI_MAX_SUPPORTED_LOGS * sizeof(*gsl->entries));
+    if (!gsl)
+        return -1;
+
+    rc = cxlmi_cmd_get_supported_logs(ep, NULL, gsl);
+    if (rc) {
+        free(gsl);
+        return rc;
+    }
+
+    for (int i = 0; i < gsl->num_supported_log_entries; i++) {
+        if (memcmp(gsl->entries[i].uuid, cel_uuid, sizeof(cel_uuid)) == 0) {
+            cel_size = gsl->entries[i].log_size;
+            break;
+        }
+    }
+    free(gsl);
+
+    if (cel_size == 0) {
+        printf("CEL log not found\n");
+        return -1;
+    }
+
+    // Get and show the log
+    struct cxlmi_cmd_get_log_req get_log_req = {0};
+    struct cxlmi_cmd_get_log_cel_rsp *log_data;
+
+    memcpy(get_log_req.uuid, cel_uuid, sizeof(cel_uuid));
+    get_log_req.offset = 0;
+    get_log_req.length = cel_size;
+
+    log_data = calloc(1, cel_size);
+    if (!log_data)
+        return -1;
+
+    rc = cxlmi_cmd_get_log_cel(ep, NULL, &get_log_req, log_data);
+    if (rc) {
+        free(log_data);
+        return rc;
+    }
+
+    printf("Current log contents:\n");
+    for (size_t i = 0; i < cel_size / sizeof(*log_data); i++) {
+        printf("  [%04x] %s%s%s%s%s%s%s%s\n",
+               log_data[i].opcode,
+               log_data[i].command_effect & 0x1 ? "ColdReset " : "",
+               log_data[i].command_effect & 0x2 ? "ImConf " : "",
+               log_data[i].command_effect & 0x4 ? "ImData " : "",
+               log_data[i].command_effect & 0x8 ? "ImPol " : "",
+               log_data[i].command_effect & 0x10 ? "ImLog " : "",
+               log_data[i].command_effect & 0x20 ? "ImSec " : "",
+               log_data[i].command_effect & 0x40 ? "BgOp " : "",
+               log_data[i].command_effect & 0x80 ? "SecSup " : "");
+    }
+
+    free(log_data);
+
+    memcpy(clear_log.uuid, cel_uuid, sizeof(clear_log.uuid));
+    rc = cxlmi_cmd_clear_log(ep, NULL, &clear_log);
+    if (rc) {
+        printf("Failed to clear log: %s\n", cxlmi_cmd_retcode_tostr(rc));
+        return rc;
+    }
+
+    printf("Log cleared successfully.\n");
+
+    // Get and show the log again
+    log_data = calloc(1, cel_size);
+    if (!log_data)
+        return -1;
+
+    rc = cxlmi_cmd_get_log_cel(ep, NULL, &get_log_req, log_data);
+    if (rc) {
+        free(log_data);
+        return rc;  
+    }
+
+    printf("Log contents after clearing:\n");
+    for (size_t i = 0; i < cel_size / sizeof(*log_data); i++) {
+        printf("  [%04x] %s%s%s%s%s%s%s%s\n",
+               log_data[i].opcode,
+               log_data[i].command_effect & 0x1 ? "ColdReset " : "",
+               log_data[i].command_effect & 0x2 ? "ImConf " : "",   
+               log_data[i].command_effect & 0x4 ? "ImData " : "",
+               log_data[i].command_effect & 0x8 ? "ImPol " : "",
+               log_data[i].command_effect & 0x10 ? "ImLog " : "",
+               log_data[i].command_effect & 0x20 ? "ImSec " : "",
+               log_data[i].command_effect & 0x40 ? "BgOp " : "",
+               log_data[i].command_effect & 0x80 ? "SecSup " : "");
+    }
+    free(log_data); 
+
+    memcpy(populate_log.uuid, cel_uuid, sizeof(populate_log.uuid));
+    rc = cxlmi_cmd_populate_log(ep, NULL, &populate_log);
+    if (rc) {
+        printf("Failed to populate log: %s\n", cxlmi_cmd_retcode_tostr(rc));
+        return rc;
+    }
+
+    printf("Log populated successfully.\n");
+
+    // Get and show the log again
+    log_data = calloc(1, cel_size);
+    if (!log_data)
+        return -1;
+
+    rc = cxlmi_cmd_get_log_cel(ep, NULL, &get_log_req, log_data);
+    if (rc) {
+        free(log_data);
+        return rc;
+    }
+    
+    printf("Log contents after populating:\n");
+    for (size_t i = 0; i < cel_size / sizeof(*log_data); i++) {
+        printf("  [%04x] %s%s%s%s%s%s%s%s\n",
+               log_data[i].opcode,
+               log_data[i].command_effect & 0x1 ? "ColdReset " : "",
+               log_data[i].command_effect & 0x2 ? "ImConf " : "",
+               log_data[i].command_effect & 0x4 ? "ImData " : "",
+               log_data[i].command_effect & 0x8 ? "ImPol " : "",
+               log_data[i].command_effect & 0x10 ? "ImLog " : "",   
+               log_data[i].command_effect & 0x20 ? "ImSec " : "",
+               log_data[i].command_effect & 0x40 ? "BgOp " : "",
+               log_data[i].command_effect & 0x80 ? "SecSup " : "");
+    }
+    free(log_data);
+
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     struct cxlmi_ctx *ctx;
@@ -242,6 +382,7 @@ int main(int argc, char **argv)
         printf("2. Test timestamp\n");
         printf("3. Get device logs\n");
         printf("4. Get device logs capabilities\n");
+        printf("5. Clear and populate device log\n");
         printf("q. Quit\n");
         printf("Enter your choice: ");
         int ret = scanf(" %c", &choice);
@@ -276,6 +417,13 @@ int main(int argc, char **argv)
                 rc = get_device_logs_capabilities(ep);
                 if (rc) {
                     fprintf(stderr, "Failed to get device logs capabilities\n");
+                    goto exit_close_ep;
+                }
+                break;
+            case '5':
+                rc = clear_and_populate_device_log(ep);
+                if (rc) {
+                    fprintf(stderr, "Failed to clear and populate device log\n");
                     goto exit_close_ep;
                 }
                 break;
