@@ -15,3 +15,10 @@ executable(
     dependencies: libcxlmi_dep,
     include_directories: [inc]
 )
+
+executable(
+    'cxl-test-interface',
+    ['cxl-test-interface.c'],
+    dependencies: libcxlmi_dep,
+    include_directories: [inc]
+)
