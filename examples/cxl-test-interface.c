@@ -11,19 +11,66 @@ static int show_device_info(struct cxlmi_endpoint *ep)
 {
     int rc;
     struct cxlmi_cmd_identify id;
-
+    struct cxlmi_cmd_bg_op_status bg_op_status;
+    struct cxlmi_cmd_get_response_msg_limit rsp_msg_limit;
+    struct cxlmi_cmd_set_response_msg_limit set_rsp_msg_limit;
+    
     rc = cxlmi_cmd_identify(ep, NULL, &id);
     if (rc) {
         fprintf(stderr, "Failed to identify device: %s\n", cxlmi_cmd_retcode_tostr(rc));
-        return rc;
+        //return rc;
     }
 
     printf("Serial number: 0x%lx\n", (uint64_t)id.serial_num);
     printf("Vendor ID: %04x\n", id.vendor_id);
     printf("Device ID: %04x\n", id.device_id);
+    printf("Subsystem Vendor ID: %04x\n", id.subsys_vendor_id);
+    printf("Subsystem ID: %04x\n", id.subsys_id);
+    printf("Max Message Size: %d\n", id.max_msg_size);
+    printf("Component Type: %d\n", id.component_type);
+
+    rc = cxlmi_cmd_bg_op_status(ep, NULL, &bg_op_status);
+    if (rc) {
+        fprintf(stderr, "Failed to get background operation status: %s\n", cxlmi_cmd_retcode_tostr(rc));
+        //return rc;
+    }
+
+    printf("Background Operation Status: %d\n", bg_op_status.status);
+    printf("Opcode: %04x\n", bg_op_status.opcode);
+    printf("Return Code: %04x\n", bg_op_status.returncode);
+    printf("Vendor Extension Status: %04x\n", bg_op_status.vendor_ext_status);
+    
+    rc = cxlmi_cmd_get_response_msg_limit(ep, NULL, &rsp_msg_limit);
+    if (rc) {
+        fprintf(stderr, "Failed to get response message limit: %s\n", cxlmi_cmd_retcode_tostr(rc));
+        //return rc;
+    }
+    printf("Response Message Limit: %d\n", rsp_msg_limit.limit);
+
+    rc = cxlmi_cmd_set_response_msg_limit(ep, NULL, &set_rsp_msg_limit);
+    if (rc) {   
+        fprintf(stderr, "Failed to set response message limit: %s\n", cxlmi_cmd_retcode_tostr(rc));
+        //return rc;
+    }
+    printf("Response Message Limit set to: %d\n", set_rsp_msg_limit.limit);
+
+    rc = cxlmi_cmd_get_response_msg_limit(ep, NULL, &rsp_msg_limit);
+    if (rc) {
+        fprintf(stderr, "Failed to get response message limit: %s\n", cxlmi_cmd_retcode_tostr(rc));
+        //return rc;
+    }   
+    printf("Response Message Limit after set: %d\n", rsp_msg_limit.limit);
+
+    rc = cxlmi_cmd_request_bg_op_abort(ep, NULL);
+    if (rc) {
+        fprintf(stderr, "Failed to request background operation abort: %s\n", cxlmi_cmd_retcode_tostr(rc));
+        //return rc;
+    }
+    printf("Background Operation Abort requested\n");
 
     return 0;
 }
+
 
 static int test_timestamp(struct cxlmi_endpoint *ep)
 {
